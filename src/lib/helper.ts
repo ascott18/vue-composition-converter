@@ -65,7 +65,7 @@ export const getMethodExpression = (
     const async = node.modifiers?.some(
       (mod) => mod.kind === ts.SyntaxKind.AsyncKeyword
     )
-      ? "async"
+      ? "async "
       : "";
 
     const name = node.name.getText(sourceFile);
@@ -74,7 +74,6 @@ export const getMethodExpression = (
     const parameters = node.parameters
       .map((param) => param.getText(sourceFile))
       .join(",");
-    const fn = `${async}(${parameters})${type} =>${body}`;
 
     if (lifecycleNameMap.has(name)) {
       const newLifecycleName = lifecycleNameMap.get(name);
@@ -82,14 +81,14 @@ export const getMethodExpression = (
       return [
         {
           use: newLifecycleName,
-          expression: `${newLifecycleName ?? ""}(${fn})${immediate}`,
+          expression: `${newLifecycleName ?? ""}(${async}(${parameters})${type} =>${body})${immediate}`,
         },
       ];
     }
     return [
       {
         returnNames: [name],
-        expression: `const ${name} = ${fn}`,
+        expression: `${async}function ${name} (${parameters})${type} ${body}`,
       },
     ];
   } else if (ts.isSpreadAssignment(node)) {
@@ -143,12 +142,11 @@ export const replaceThisContext = (
 
 export const getImportStatement = (setupProps: ConvertedExpression[]) => {
   const usedFunctions = [
-    "defineComponent",
     ...new Set(setupProps.map(({ use }) => use).filter(nonNull)),
   ];
   return ts.createSourceFile(
     "",
-    `import { ${usedFunctions.join(",")} } from '@vue/composition-api'`,
+    `import { ${usedFunctions.join(",")} } from 'vue'`,
     ts.ScriptTarget.Latest
   ).statements;
 };
@@ -203,14 +201,7 @@ export const getSetupStatements = (setupProps: ConvertedExpression[]) => {
     }
   });
 
-  const returnPropsStatement = `return {${setupProps
-    .filter((prop) => prop.use !== "toRefs") // ignore spread props
-    .map(({ returnNames }) => returnNames)
-    .filter(nonNull)
-    .flat()
-    .join(",")}}`;
-
-  return [...setupProps, { expression: returnPropsStatement }]
+  return setupProps
     .map(
       ({ expression }) =>
         ts.createSourceFile(

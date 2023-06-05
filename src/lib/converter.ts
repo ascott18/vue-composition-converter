@@ -1,12 +1,14 @@
 import ts from "typescript";
-import { parseComponent } from "vue-template-compiler";
+import { parse } from "vue/compiler-sfc";
 import { getNodeByKind } from "./helper";
 import { convertClass } from "./converters/classApiConverter";
 import { convertOptionsApi } from "./converters/optionsApiConverter";
 
 export const convertSrc = (input: string): string => {
-  const parsed = parseComponent(input);
-  const { script } = parsed;
+  const parsed = parse(input);
+  const {
+    descriptor: { script },
+  } = parsed;
   const scriptContent = script?.content || "";
 
   const sourceFile = ts.createSourceFile(

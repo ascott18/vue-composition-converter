@@ -11,4 +11,14 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  build: {
+    lib: {
+      entry: fileURLToPath(new URL("./src/lib/converter.ts", import.meta.url)),
+      formats: ["es"],
+      fileName: () => "converter.mjs",
+    },
+    rollupOptions: {
+      external: ["vue", "vue/compiler-sfc", "typescript"],
+    },
+  },
 });

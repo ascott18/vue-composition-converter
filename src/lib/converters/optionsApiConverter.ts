@@ -1,5 +1,5 @@
 import ts from "typescript";
-import { getExportStatement, getImportStatement } from "../helper";
+import { getImportStatement, getSetupStatements } from '../helper'
 import { convertOptions } from "./options/optionsConverter";
 
 export const convertOptionsApi = (sourceFile: ts.SourceFile) => {
@@ -14,7 +14,7 @@ export const convertOptionsApi = (sourceFile: ts.SourceFile) => {
     [
       ...getImportStatement(setupProps),
       ...sourceFile.statements.filter((state) => !ts.isExportAssignment(state)),
-      getExportStatement(setupProps, propNames, otherProps),
+      ...getSetupStatements(setupProps),
     ],
     sourceFile.endOfFileToken,
     sourceFile.flags
