@@ -1,8 +1,9 @@
-import ts from "typescript";
+import ts, { isPropertyAssignment } from "typescript";
 import {
   ConvertedExpression,
   getExportStatement,
   getImportStatement,
+  getSetupStatements,
   lifecycleNameMap,
 } from "../helper";
 import { convertOptions } from "./options/optionsConverter";
@@ -28,9 +29,10 @@ export const convertClass = (
     return {
       use: "ref",
       returnNames: [key],
-      expression: `const ${key} = ref${
+      expression: `${val.comments}const ${key} = ref${
         type ? `<${type}>` : ""
       }(${initializer})`,
+      order: val.order,
     };
   });
 
@@ -43,17 +45,19 @@ export const convertClass = (
 
       return {
         use: "computed",
-        expression: `const ${key} = computed({
+        expression: `${val.comments}${setter.comments}const ${key} = computed({
             get()${typeName} ${block},
             set(${setter.parameters}) ${setter.block}
           })`,
         returnNames: [key],
+        order: val.order,
       };
     }
     return {
       use: "computed",
-      expression: `const ${key} = computed(()${typeName} => ${block})`,
+      expression: `${val.comments}const ${key} = computed(()${typeName} => ${block})`,
       returnNames: [key],
+      order: val.order,
     };
   });
   const methodsProps: ConvertedExpression[] = Array.from(
@@ -61,8 +65,9 @@ export const convertClass = (
   ).map(([key, val]) => {
     const { async, type, body, parameters } = val;
     return {
-      expression: `const ${key} = ${async}(${parameters})${type} => ${body}`,
+      expression: `${val.comments}${async} function ${key}(${parameters})${type} ${body} `,
       returnNames: [key],
+      order: val.order,
     };
   });
   const watchProps: ConvertedExpression[] = Array.from(
@@ -74,6 +79,7 @@ export const convertClass = (
       expression: `watch(${[key, callback, options]
         .filter((item) => item != null)
         .join(",")})`,
+      order: val.order,
     };
   });
   const lifecycleProps: ConvertedExpression[] = Array.from(
@@ -87,61 +93,75 @@ export const convertClass = (
 
     return {
       use: newLifecycleName,
-      expression: `${newLifecycleName ?? ""}(${fn})${immediate}`,
+      expression: `${val.comments}${newLifecycleName ?? ""}(${fn})${immediate}`,
+      order: val.order,
     };
   });
   propNames.push(...Array.from(classProps.propsMap.keys()));
 
-  const propsRefProps: ConvertedExpression[] =
-    propNames.length === 0
-      ? []
-      : [
-          {
-            use: "toRefs",
-            expression: `const { ${propNames.join(",")} } = toRefs(props)`,
-            returnNames: propNames,
-          },
-        ];
-
   setupProps.push(
-    ...propsRefProps,
-    ...dataProps,
-    ...computedProps,
-    ...methodsProps,
-    ...watchProps,
-    ...lifecycleProps
+    ...[
+      ...dataProps,
+      ...computedProps,
+      ...methodsProps,
+      ...watchProps,
+      ...lifecycleProps,
+    ].sort((a, b) => a.order - b.order)
   );
 
-  const classPropsNode = ts.factory.createPropertyAssignment(
-    "props",
-    ts.factory.createObjectLiteralExpression(
-      Array.from(classProps.propsMap.entries()).map(([key, value]) => {
-        const { node } = value;
-        return ts.factory.createPropertyAssignment(key, node);
-      })
-    )
-  );
-  otherProps.push(...classProps.otherProps, classPropsNode);
+  if (classProps.componentProps.length) {
+    let defineProps = `defineProps<{${classProps.componentProps
+      .map((p) => `${p.comments.trimStart()}${p.name}: ${p.tsType}`)
+      .join("\n")}}>()`;
+    const defaults = classProps.componentProps.filter((p) => p.default);
+    if (defaults) {
+      defineProps = `withDefaults(${defineProps}, {${defaults
+        .map((p) => `${p.name}: ${p.default}`)
+        .join(",\n")}})`;
+    }
+    defineProps = "const props = " + defineProps + "\n";
+
+    setupProps.unshift({
+      expression: defineProps,
+      order: 0,
+    });
+  }
 
   const newSrc = ts.factory.createSourceFile(
     [
-      ...getImportStatement([
-        ...setupProps,
-        ...Array.from(classProps.propsMap.values()).map((prop) => {
-          return {
-            expression: "",
-            use: prop.use,
-          };
-        }),
-      ]),
-      ...sourceFile.statements.filter((state) => !ts.isClassDeclaration(state)),
-      getExportStatement(setupProps, propNames, otherProps),
+      // Import statement excluded, assuming use of unplugin-auto-import
+      // ...getImportStatement([
+      //   ...setupProps,
+      //   ...Array.from(classProps.propsMap.values()).map((prop) => {
+      //     return {
+      //       expression: "",
+      //       use: prop.use,
+      //     };
+      //   }),
+      // ]),
+      ...sourceFile.statements.filter(
+        (state) =>
+          !ts.isClassDeclaration(state) &&
+          (!ts.isImportDeclaration(state) ||
+            !ts.isStringLiteral(state.moduleSpecifier) ||
+            !["vue-class-component", "vue-property-decorator"].includes(
+              state.moduleSpecifier.text
+            ))
+      ),
     ],
     sourceFile.endOfFileToken,
     sourceFile.flags
   );
-  const printer = ts.createPrinter();
-  return printer.printFile(newSrc);
+  const printer = ts.createPrinter({ removeComments: false });
+  const ret = printer.printFile(newSrc);
+
+  return (
+    ret +
+    getSetupStatements(
+      setupProps,
+      classProps.componentProps.map((p) => p.name)
+    )
+  );
 };
 
 const parseClassNode = (
@@ -152,6 +172,12 @@ const parseClassNode = (
     string,
     { use?: string; node: ts.ObjectLiteralExpression }
   > = new Map();
+  const componentProps: {
+    name: string;
+    tsType?: string;
+    default?: string;
+    comments: string;
+  }[] = [];
   const dataMap: Map<string, any> = new Map();
   const getterMap: Map<string, any> = new Map();
   const setterMap: Map<string, any> = new Map();
@@ -160,8 +186,22 @@ const parseClassNode = (
   const lifecycleMap: Map<string, any> = new Map();
   const otherProps: ts.ObjectLiteralElementLike[] = [];
 
+  let order = 0;
   classNode.members.forEach((member) => {
+    order++;
     const { decorators } = member;
+
+    // Not actually only comments - includes all leading trivia, including whitespace.
+    const comments =
+      sourceFile
+        .getFullText()
+        .slice(member.getFullStart(), member.getStart(sourceFile)) || "";
+
+    // const comments =
+    //   commentRanges
+    //     ?.map((r) => sourceFile.getFullText().slice(r.pos, r.end) + "\n")
+    //     .join() || "";
+
     if (ts.isGetAccessor(member)) {
       // computed method
       const { name: propName, body, type } = member;
@@ -170,8 +210,11 @@ const parseClassNode = (
       const name = propName.getText(sourceFile);
 
       getterMap.set(name, {
+        comments,
+        member,
         typeName,
         block,
+        order,
       });
     }
     if (ts.isSetAccessor(member)) {
@@ -184,9 +227,11 @@ const parseClassNode = (
         .join(",");
 
       setterMap.set(name, {
+        comments,
         parameters,
         typeName,
         block,
+        order,
       });
     }
     if (ts.isMethodDeclaration(member)) {
@@ -210,10 +255,12 @@ const parseClassNode = (
         .join(",");
 
       const obj = {
+        comments,
         async,
         type,
         body,
         parameters,
+        order,
       };
 
       if (lifecycleNameMap.has(name)) {
@@ -228,7 +275,7 @@ const parseClassNode = (
         if (!(decorator && decorator.decoratorName === "Watch")) return;
 
         const [target, options] = decorator.args;
-        watchMap.set(target, { callback: name, options });
+        watchMap.set(target, { callback: name, options, order });
       }
     }
     if (ts.isPropertyDeclaration(member)) {
@@ -236,15 +283,23 @@ const parseClassNode = (
       const type = member.type?.getText(sourceFile);
       if (decorators) {
         // props
-        const node = parsePropDecorator(decorators[0], sourceFile, type);
-        if (node) propsMap.set(name, node);
+        const node = {
+          ...parsePropDecorator(decorators[0], sourceFile, type),
+          comments,
+        };
+        if (node) {
+          propsMap.set(name, node as any);
+          componentProps.push({ name, ...node });
+        }
 
         return;
       }
       const initializer = member.initializer?.getText(sourceFile);
       dataMap.set(name, {
+        comments,
         type,
         initializer,
+        order,
       });
     }
   });
@@ -252,6 +307,7 @@ const parseClassNode = (
   return {
     otherProps,
     propsMap,
+    componentProps,
     dataMap,
     getterMap,
     setterMap,
@@ -311,6 +367,7 @@ const parsePropDecorator = (
     if (tsType == null) {
       return {
         node: arg,
+        tsType: "unknown",
       };
     }
 
@@ -328,6 +385,13 @@ const parsePropDecorator = (
       return {
         use: vuePropType.use,
         node: options,
+        tsType,
+        default: arg.properties
+          .filter(ts.isPropertyAssignment)
+          .find(
+            (p) => p.name && ts.isIdentifier(p.name) && p.name.text == "default"
+          )
+          ?.initializer?.getText(sourceFile),
       };
     }
   }
@@ -340,6 +404,7 @@ const parsePropDecorator = (
         ts.factory.createIdentifier(vuePropType.expression)
       ),
     ]),
+    tsType,
   };
 };
 const getDecoratorParams = (

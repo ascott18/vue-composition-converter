@@ -13,6 +13,7 @@ export type ConvertedExpression = {
   expression: string;
   returnNames?: string[];
   use?: string;
+  order: number;
 };
 
 export const lifecycleNameMap: Map<string, string | undefined> = new Map([
@@ -81,7 +82,9 @@ export const getMethodExpression = (
       return [
         {
           use: newLifecycleName,
-          expression: `${newLifecycleName ?? ""}(${async}(${parameters})${type} =>${body})${immediate}`,
+          expression: `${
+            newLifecycleName ?? ""
+          }(${async}(${parameters})${type} =>${body})${immediate}`,
         },
       ];
     }
@@ -128,7 +131,8 @@ const contextProps = [
 
 export const replaceThisContext = (
   str: string,
-  refNameMap: Map<string, true>
+  refNameMap: Map<string, true>,
+  componentPropNames?: string[]
 ) => {
   return str
     .replace(/this\.\$(\w+)/g, (_, p1) => {
@@ -136,7 +140,11 @@ export const replaceThisContext = (
       return `ctx.root.$${p1}`;
     })
     .replace(/this\.([\w-]+)/g, (_, p1) => {
-      return refNameMap.has(p1) ? `${p1}.value` : p1;
+      return refNameMap.has(p1)
+        ? `${p1}.value`
+        : componentPropNames?.includes(p1)
+        ? `props.${p1}`
+        : p1;
     });
 };
 
@@ -171,7 +179,13 @@ export const getExportStatement = (
     undefined,
     setupArgs,
     undefined,
-    ts.factory.createBlock(getSetupStatements(setupProps))
+    ts.factory.createBlock(
+      ts.createSourceFile(
+        "",
+        getSetupStatements(setupProps),
+        ts.ScriptTarget.Latest
+      ).statements
+    )
   );
 
   return ts.factory.createExportAssignment(
@@ -186,7 +200,10 @@ export const getExportStatement = (
   );
 };
 
-export const getSetupStatements = (setupProps: ConvertedExpression[]) => {
+export const getSetupStatements = (
+  setupProps: ConvertedExpression[],
+  componentPropNames?: string[]
+) => {
   // this.prop => prop.valueにする対象
   const refNameMap: Map<string, true> = new Map();
   setupProps.forEach(({ use, returnNames }) => {
@@ -203,12 +220,8 @@ export const getSetupStatements = (setupProps: ConvertedExpression[]) => {
 
   return setupProps
     .map(
-      ({ expression }) =>
-        ts.createSourceFile(
-          "",
-          replaceThisContext(expression, refNameMap),
-          ts.ScriptTarget.Latest
-        ).statements
+      (p) =>
+        replaceThisContext(p.expression, refNameMap, componentPropNames)
     )
-    .flat();
+    .join("");
 };

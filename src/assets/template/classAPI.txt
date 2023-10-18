@@ -27,11 +27,14 @@ export default class SomeComponent extends Vue {
 
   @Prop()
   value: string
+
+  /** Documented Prop */
   @Prop({ default: '#f00', required: false })
   color: string
 
   @Watch('value', { immediate: true })
   onValueChange(val, oldVal) {
+    // onValueChange comment
     console.log(val)
   }
 
@@ -59,13 +62,14 @@ export default class SomeComponent extends Vue {
   // Declared as computed property setter
   set name(value) {
     const splitted = value.split(' ')
+
     this.firstName = splitted[0]
     this.lastName = splitted[1] || ''
   }
 
   // Declare mounted lifecycle hook
   mounted() {
-    console.log('mounted')
+    console.log('mounted' + this.color + this.propB + this.value)
   }
 
   // Declare render function

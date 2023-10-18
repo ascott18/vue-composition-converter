@@ -2,6 +2,7 @@
 import { ref, watch } from "vue";
 import prettier from "prettier";
 import parserTypeScript from "prettier/parser-typescript";
+import parserHtml from "prettier/parser-html";
 import hljs from "highlight.js/lib/core";
 import typescript from "highlight.js/lib/languages/typescript";
 import "highlight.js/styles/atom-one-dark.css";
@@ -21,7 +22,7 @@ const output = ref("");
 const hasError = ref(false);
 const templateKeys = Array.from(templateMap.keys());
 
-const selectedTemplate = ref(templateKeys[0]);
+const selectedTemplate = ref(templateKeys[1]);
 watch(
   selectedTemplate,
   async () => {
@@ -45,8 +46,8 @@ watch(
       const outputText = convertSrc(input.value);
       const prettifiedHtml = hljs.highlightAuto(
         prettier.format(outputText, {
-          parser: "typescript",
-          plugins: [parserTypeScript],
+          parser: "html",
+          plugins: [parserTypeScript, parserHtml],
         })
       ).value;
       output.value = prettifiedHtml;
