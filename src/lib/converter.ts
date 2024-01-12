@@ -14,7 +14,7 @@ export const convertSrc = (input: string): string => {
   const scriptContent = script?.content || "";
   
   const sourceFile = ts.createSourceFile(
-    "src.tsx",
+    "src.ts",
     scriptContent,
     ts.ScriptTarget.Latest
   );
@@ -36,10 +36,19 @@ export const convertSrc = (input: string): string => {
     }
   })();
 
-  newScript = prettier.format(newScript, {
-    parser: "typescript",
-    plugins: [parserTypeScript],
-  });
+  if (!newScript) {
+    throw new Error("unable to parse input")
+  }
+
+  try {
+    newScript = prettier.format(newScript, {
+      parser: "typescript",
+      plugins: [parserTypeScript],
+    });
+  }
+  catch (e) {
+    console.error("Prettier failed on script", e);
+  }
 
   return `
   ${input.substring(0, script!.loc.start.offset)}

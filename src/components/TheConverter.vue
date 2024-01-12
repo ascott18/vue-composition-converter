@@ -17,7 +17,8 @@ const templateMap = new Map([
   ["classAPI", classApi],
 ]);
 
-const input = ref("");
+//@ts-expect-error global
+const input = ref(window.__converterLastInput || "");
 const output = ref("");
 const hasError = ref(false);
 const templateKeys = Array.from(templateMap.keys());
@@ -27,6 +28,7 @@ watch(
   selectedTemplate,
   async () => {
     hasError.value = false;
+
     try {
       input.value = templateMap.get(selectedTemplate.value) || "";
       console.log(input.value);
@@ -35,15 +37,26 @@ watch(
       console.error(err);
     }
   },
-  { immediate: true }
+  { immediate: !window.__converterLastInput }
 );
 
 watch(
   input,
   () => {
     try {
+      // Make hot reload experience better by remember the last input
+      //@ts-expect-error global
+      window.__converterLastInput = input.value;
+
       hasError.value = false;
-      const outputText = convertSrc(input.value);
+      let outputText = "";
+      try {
+         outputText = convertSrc(input.value);
+      }
+      catch (e) {
+        output.value = "";
+        throw e;
+      }
       const prettifiedHtml = hljs.highlightAuto(
         prettier.format(outputText, {
           parser: "html",
@@ -62,7 +75,7 @@ watch(
 
 <template>
   <div class="flex flex-row h-full">
-    <div class="flex-1 flex flex-col">
+    <div class="flex-1 flex flex-col ">
       <div class="flex flex-row">
         <h2>Input: (Vue2)</h2>
         <select v-model="selectedTemplate" class="border">
@@ -72,7 +85,7 @@ watch(
         </select>
       </div>
       <textarea
-        class="border w-full text-xs leading-3 flex-1 p-2"
+        class="border w-full text-xs leading-3 flex-1 p-2" style="background: transparent"
         :class="{ hasError }"
         v-model="input"
       ></textarea>

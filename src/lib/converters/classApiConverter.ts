@@ -26,12 +26,13 @@ export const convertClass = (
     classProps.dataMap.entries()
   ).map(([key, val]) => {
     const { type, initializer } = val;
+    
     return {
       use: "ref",
       returnNames: [key],
       expression: `${val.comments}const ${key} = ref${
         type ? `<${type}>` : ""
-      }(${initializer})`,
+      }(${initializer === undefined ? "" : initializer});`,
       order: val.order,
     };
   });
@@ -48,28 +49,31 @@ export const convertClass = (
         expression: `${val.comments}${setter.comments}const ${key} = computed({
             get()${typeName} ${block},
             set(${setter.parameters}) ${setter.block}
-          })`,
+          });`,
         returnNames: [key],
         order: val.order,
       };
     }
     return {
       use: "computed",
-      expression: `${val.comments}const ${key} = computed(()${typeName} => ${block})`,
+      expression: `${val.comments}const ${key} = computed(()${typeName} => ${block});`,
       returnNames: [key],
       order: val.order,
     };
   });
+
   const methodsProps: ConvertedExpression[] = Array.from(
     classProps.methodsMap.entries()
   ).map(([key, val]) => {
     const { async, type, body, parameters } = val;
+    
     return {
       expression: `${val.comments}${async} function ${key}(${parameters})${type} ${body} `,
       returnNames: [key],
       order: val.order,
     };
   });
+
   const watchProps: ConvertedExpression[] = Array.from(
     classProps.watchMap.entries()
   ).map(([key, val]) => {
@@ -78,10 +82,11 @@ export const convertClass = (
       use: "watch",
       expression: `watch(${[key, callback, options]
         .filter((item) => item != null)
-        .join(",")})`,
+        .join(",")});`,
       order: val.order,
     };
   });
+
   const lifecycleProps: ConvertedExpression[] = Array.from(
     classProps.lifecycleMap.entries()
   ).map(([key, val]) => {
@@ -93,7 +98,7 @@ export const convertClass = (
 
     return {
       use: newLifecycleName,
-      expression: `${val.comments}${newLifecycleName ?? ""}(${fn})${immediate}`,
+      expression: `${val.comments}${newLifecycleName ?? ""}(${fn})${immediate};`,
       order: val.order,
     };
   });
@@ -112,14 +117,15 @@ export const convertClass = (
   if (classProps.componentProps.length) {
     let defineProps = `defineProps<{${classProps.componentProps
       .map((p) => `${p.comments.trimStart()}${p.name}: ${p.tsType}`)
-      .join("\n")}}>()`;
+      .join(";\n")}}>()`;
+
     const defaults = classProps.componentProps.filter((p) => p.default);
-    if (defaults) {
+    if (defaults.length) {
       defineProps = `withDefaults(${defineProps}, {${defaults
         .map((p) => `${p.name}: ${p.default}`)
         .join(",\n")}})`;
     }
-    defineProps = "const props = " + defineProps + "\n";
+    defineProps = "\nconst props = " + defineProps + "\n";
 
     setupProps.unshift({
       expression: defineProps,
@@ -260,7 +266,7 @@ const parseClassNode = (
         type,
         body,
         parameters,
-        order,
+        order: name == "created" ? 99999 : order,
       };
 
       if (lifecycleNameMap.has(name)) {
@@ -281,20 +287,30 @@ const parseClassNode = (
     if (ts.isPropertyDeclaration(member)) {
       const name = member.name.getText(sourceFile);
       const type = member.type?.getText(sourceFile);
+      
       if (decorators) {
         // props
-        const node = {
+        const parsedPropDecorator = parsePropDecorator(decorators[0], sourceFile, type);
+        if (!parsedPropDecorator) return;
+
+        const nodeData = {
           ...parsePropDecorator(decorators[0], sourceFile, type),
           comments,
         };
-        if (node) {
-          propsMap.set(name, node as any);
-          componentProps.push({ name, ...node });
-        }
+
+        propsMap.set(name, nodeData as any);
+        componentProps.push({ name, ...nodeData });
 
         return;
       }
+
       const initializer = member.initializer?.getText(sourceFile);
+      if (name == initializer) {
+        // This looks like just putting an export onto the class component
+        // so its available in the template, which isn't needed with script setup.
+        return;
+      }
+
       dataMap.set(name, {
         comments,
         type,
