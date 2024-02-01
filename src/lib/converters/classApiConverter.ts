@@ -1,7 +1,6 @@
 import ts, { isPropertyAssignment } from "typescript";
 import {
   ConvertedExpression,
-  getExportStatement,
   getImportStatement,
   getSetupStatements,
   lifecycleNameMap,
@@ -15,8 +14,8 @@ export const convertClass = (
   const options = convertOptions(sourceFile);
 
   const { setupProps, propNames, otherProps } = options || {
-    setupProps: [],
-    propNames: [],
+    setupProps: [] as ConvertedExpression[],
+    propNames: [] as string[],
     otherProps: [],
   };
 
@@ -26,7 +25,7 @@ export const convertClass = (
     classProps.dataMap.entries()
   ).map(([key, val]) => {
     const { type, initializer } = val;
-    
+
     return {
       use: "ref",
       returnNames: [key],
@@ -66,7 +65,7 @@ export const convertClass = (
     classProps.methodsMap.entries()
   ).map(([key, val]) => {
     const { async, type, body, parameters } = val;
-    
+
     return {
       expression: `${val.comments}${async} function ${key}(${parameters})${type} ${body} `,
       returnNames: [key],
@@ -98,7 +97,9 @@ export const convertClass = (
 
     return {
       use: newLifecycleName,
-      expression: `${val.comments}${newLifecycleName ?? ""}(${fn})${immediate};`,
+      expression: `${val.comments}${
+        newLifecycleName ?? ""
+      }(${fn})${immediate};`,
       order: val.order,
     };
   });
@@ -111,12 +112,17 @@ export const convertClass = (
       ...methodsProps,
       ...watchProps,
       ...lifecycleProps,
-    ].sort((a, b) => a.order - b.order)
+    ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
   );
 
   if (classProps.componentProps.length) {
     let defineProps = `defineProps<{${classProps.componentProps
-      .map((p) => `${p.comments.trimStart()}${p.name}: ${p.tsType}`)
+      .map(
+        (p) =>
+          `${p.comments.trimStart()}${p.name}${p.default ? "?" : ""}: ${
+            p.tsType
+          }`
+      )
       .join(";\n")}}>()`;
 
     const defaults = classProps.componentProps.filter((p) => p.default);
@@ -287,10 +293,14 @@ const parseClassNode = (
     if (ts.isPropertyDeclaration(member)) {
       const name = member.name.getText(sourceFile);
       const type = member.type?.getText(sourceFile);
-      
+
       if (decorators) {
         // props
-        const parsedPropDecorator = parsePropDecorator(decorators[0], sourceFile, type);
+        const parsedPropDecorator = parsePropDecorator(
+          decorators[0],
+          sourceFile,
+          type
+        );
         if (!parsedPropDecorator) return;
 
         const nodeData = {

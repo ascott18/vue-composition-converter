@@ -1,5 +1,5 @@
 import ts from "typescript";
-import { ConvertedExpression, getNodeByKind } from "../../helper";
+import { ConvertedExpression, getNodeByKind, getComments } from "../../helper";
 
 export const dataConverter = (
   node: ts.Node,
@@ -15,7 +15,10 @@ export const dataConverter = (
       const text = prop.initializer.getText(sourceFile);
       return {
         use: "ref",
-        expression: `const ${name} = ref(${text})`,
+        expression: `${getComments(
+          prop,
+          sourceFile
+        )}const ${name} = ref(${text})`,
         returnNames: [name],
       };
     })

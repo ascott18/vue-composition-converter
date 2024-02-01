@@ -19,13 +19,22 @@ export default Vue.extend({
       type: Object,
       required: true,
     },
+
+    /** Doc comment on prop2 */
+    prop2: {
+      type: Object,
+      required: true,
+    },
   },
   data() {
     return {
       strData: 'str',
       numData: 10,
       boolData: true,
+
+      /** Doc comment on objData */
       objData: { a: 1 },
+
       firstName: 'firstName',
       lastName: 'lastName',
     }
@@ -33,9 +42,11 @@ export default Vue.extend({
   computed: {
     ...mapGetters('module1', ['getter1']),
     ...mapState('module2', ['state1']),
+
     doubledNum(): number {
       return this.numData * 2
     },
+
     fullName: {
       get(): string {
         return `${this.firstName} ${this.lastName}`
@@ -51,9 +62,11 @@ export default Vue.extend({
     numData(curr, prev) {
       console.log(`num: ${prev} -> ${curr}`)
     },
+
     '$route.params'() {
       console.log('routeParams changed')
     },
+
     prop1: {
       handler(val) {
         this.objData = val
@@ -62,10 +75,12 @@ export default Vue.extend({
       deep: true,
     },
   },
+
   async created(){
     console.log('async created')
     await this.asyncMethod()
   },
+
   mounted() {
     console.log('mounted')
     this.$nextTick(()=> {
@@ -73,22 +88,28 @@ export default Vue.extend({
     })
     this.strData = this.$store.state.aaa
   },
+
   destroyed(){
     console.log('destroyed')
   },
+
   methods: {
     ...mapActions('module3', ['action1']),
+
     increment():number {
       return this.numData++
     },
+
     async asyncMethod(args) {
       await new Promise((resolve) => setTimeout(resolve, 1000))
       this.action1(args)
     },
   },
+
   customMethod() {
     console.log('custom')
   },
+
   customBlock: {
     rules: ['aaa']
   },

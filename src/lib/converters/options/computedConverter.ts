@@ -1,6 +1,7 @@
 import ts from "typescript";
 import {
   ConvertedExpression,
+  getComments,
   getInitializerProps,
   nonNull,
   storePath,
@@ -31,7 +32,10 @@ export const computedConverter = (
             return names.map(({ text: name }) => {
               return {
                 use: "computed",
-                expression: `const ${name} = computed(() => ${storePath}.state.${namespaceText}.${name})`,
+                expression: `${getComments(
+                  prop,
+                  sourceFile
+                )}const ${name} = computed(() => ${storePath}.state.${namespaceText}.${name})`,
                 returnNames: [name],
               };
             });
@@ -39,7 +43,10 @@ export const computedConverter = (
             return names.map(({ text: name }) => {
               return {
                 use: "computed",
-                expression: `const ${name} = computed(() => ${storePath}.getters['${namespaceText}/${name}'])`,
+                expression: `${getComments(
+                  prop,
+                  sourceFile
+                )}const ${name} = computed(() => ${storePath}.getters['${namespaceText}/${name}'])`,
                 returnNames: [name],
               };
             });
@@ -54,7 +61,10 @@ export const computedConverter = (
 
         return {
           use: "computed",
-          expression: `const ${name} = computed(()${typeName} => ${block})`,
+          expression: `${getComments(
+            prop,
+            sourceFile
+          )}const ${name} = computed(()${typeName} => ${block})`,
           returnNames: [name],
         };
       } else if (ts.isPropertyAssignment(prop)) {
@@ -66,7 +76,10 @@ export const computedConverter = (
 
         return {
           use: "computed",
-          expression: `const ${name} = computed(${block})`,
+          expression: `${getComments(
+            prop,
+            sourceFile
+          )}const ${name} = computed(${block})`,
           returnNames: [name],
         };
       }

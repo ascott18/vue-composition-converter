@@ -13,7 +13,7 @@ export type ConvertedExpression = {
   expression: string;
   returnNames?: string[];
   use?: string;
-  order: number;
+  order?: number;
 };
 
 export const lifecycleNameMap: Map<string, string | undefined> = new Map([
@@ -48,6 +48,14 @@ export const getNodeByKind = (
   return find(node);
 };
 
+export function getComments(node: ts.Node, sourceFile: ts.SourceFile) {
+  // Not actually only comments - includes all leading trivia, including whitespace.
+  return (
+    sourceFile
+      .getFullText()
+      .slice(node.getFullStart(), node.getStart(sourceFile)) || ""
+  );
+}
 export const getInitializerProps = (
   node: ts.Node
 ): ts.ObjectLiteralElementLike[] => {
@@ -82,7 +90,7 @@ export const getMethodExpression = (
       return [
         {
           use: newLifecycleName,
-          expression: `${
+          expression: `${getComments(node, sourceFile)}${
             newLifecycleName ?? ""
           }(${async}(${parameters})${type} =>${body})${immediate}`,
         },
@@ -91,7 +99,10 @@ export const getMethodExpression = (
     return [
       {
         returnNames: [name],
-        expression: `${async}function ${name} (${parameters})${type} ${body}`,
+        expression: `${getComments(
+          node,
+          sourceFile
+        )}${async}function ${name} (${parameters})${type} ${body}`,
       },
     ];
   } else if (ts.isSpreadAssignment(node)) {
@@ -110,7 +121,10 @@ export const getMethodExpression = (
     if (mapName === "mapActions") {
       return names.map(({ text: name }) => {
         return {
-          expression: `const ${name} = () => ${storePath}.dispatch('${namespaceText}/${name}')`,
+          expression: `${getComments(
+            node,
+            sourceFile
+          )}const ${name} = () => ${storePath}.dispatch('${namespaceText}/${name}')`,
           returnNames: [name],
         };
       });
@@ -129,12 +143,15 @@ const contextProps = [
   "emit",
 ];
 
-export const replaceThisContext = (
+const replaceThisContext = (
   str: string,
   refNameMap: Map<string, true>,
   componentPropNames?: string[]
 ) => {
   return str
+    .replace(/this\.\$(nextTick|watch)/g, (_, p1) => {
+      return p1;
+    })
     .replace(/this\.\$(\w+)/g, (_, p1) => {
       if (contextProps.includes(p1)) return `ctx.${p1}`;
       return `ctx.root.$${p1}`;
@@ -152,52 +169,12 @@ export const getImportStatement = (setupProps: ConvertedExpression[]) => {
   const usedFunctions = [
     ...new Set(setupProps.map(({ use }) => use).filter(nonNull)),
   ];
+  if (!usedFunctions.length) return [];
   return ts.createSourceFile(
     "",
     `import { ${usedFunctions.join(",")} } from 'vue'`,
     ts.ScriptTarget.Latest
   ).statements;
-};
-
-export const getExportStatement = (
-  setupProps: ConvertedExpression[],
-  propNames: string[],
-  otherProps: ts.ObjectLiteralElementLike[]
-) => {
-  const propsArg = propNames.length === 0 ? "_props" : `props`;
-
-  const setupArgs = [propsArg, "ctx"].map((name) =>
-    ts.factory.createParameterDeclaration(undefined, undefined, undefined, name)
-  );
-
-  const setupMethod = ts.factory.createMethodDeclaration(
-    undefined,
-    undefined,
-    undefined,
-    "setup",
-    undefined,
-    undefined,
-    setupArgs,
-    undefined,
-    ts.factory.createBlock(
-      ts.createSourceFile(
-        "",
-        getSetupStatements(setupProps),
-        ts.ScriptTarget.Latest
-      ).statements
-    )
-  );
-
-  return ts.factory.createExportAssignment(
-    undefined,
-    undefined,
-    undefined,
-    ts.factory.createCallExpression(
-      ts.factory.createIdentifier("defineComponent"),
-      undefined,
-      [ts.factory.createObjectLiteralExpression([...otherProps, setupMethod])]
-    )
-  );
 };
 
 export const getSetupStatements = (
@@ -219,9 +196,8 @@ export const getSetupStatements = (
   });
 
   return setupProps
-    .map(
-      (p) =>
-        replaceThisContext(p.expression, refNameMap, componentPropNames)
+    .map((p) =>
+      replaceThisContext(p.expression, refNameMap, componentPropNames)
     )
-    .join("");
+    .join(";");
 };

@@ -12,7 +12,7 @@ export const convertSrc = (input: string): string => {
     descriptor: { script },
   } = parsed;
   const scriptContent = script?.content || "";
-  
+
   const sourceFile = ts.createSourceFile(
     "src.ts",
     scriptContent,
@@ -37,7 +37,7 @@ export const convertSrc = (input: string): string => {
   })();
 
   if (!newScript) {
-    throw new Error("unable to parse input")
+    throw new Error("unable to parse input");
   }
 
   try {
@@ -45,8 +45,7 @@ export const convertSrc = (input: string): string => {
       parser: "typescript",
       plugins: [parserTypeScript],
     });
-  }
-  catch (e) {
+  } catch (e) {
     console.error("Prettier failed on script", e);
   }
 

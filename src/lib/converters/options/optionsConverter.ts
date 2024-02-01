@@ -55,9 +55,11 @@ const _convertOptions = (
   const watchProps: ConvertedExpression[] = [];
   const lifecycleProps: ConvertedExpression[] = [];
   const propNames: string[] = [];
+  let propsObj: string | null = null;
 
   exportObject.properties.forEach((prop) => {
     const name = prop.name?.getText(sourceFile) || "";
+
     switch (true) {
       case name === "data":
         dataProps.push(...dataConverter(prop, sourceFile));
@@ -78,6 +80,9 @@ const _convertOptions = (
       default:
         if (name === "props") {
           propNames.push(...propReader(prop, sourceFile));
+          if (ts.isPropertyAssignment(prop)) {
+            propsObj = prop.initializer.getFullText(sourceFile);
+          }
         }
 
         // 該当しないものはそのままにする
@@ -86,19 +91,19 @@ const _convertOptions = (
     }
   });
 
-  const propsRefProps: ConvertedExpression[] =
-    propNames.length === 0
-      ? []
-      : [
-          {
-            use: "toRefs",
-            expression: `const { ${propNames.join(",")} } = toRefs(props)`,
-            returnNames: propNames,
-          },
-        ];
+  // const propsRefProps: ConvertedExpression[] =
+  //   propNames.length === 0
+  //     ? []
+  //     : [
+  //         {
+  //           use: "toRefs",
+  //           expression: `const { ${propNames.join(",")} } = toRefs(props)`,
+  //           returnNames: propNames,
+  //         },
+  //       ];
 
   const setupProps: ConvertedExpression[] = [
-    ...propsRefProps,
+    // ...propsRefProps,
     ...dataProps,
     ...computedProps,
     ...methodsProps,
@@ -110,5 +115,6 @@ const _convertOptions = (
     setupProps,
     propNames,
     otherProps,
+    propsObj,
   };
 };

@@ -1,6 +1,7 @@
 import ts from "typescript";
 import {
   ConvertedExpression,
+  getComments,
   getInitializerProps,
   nonNull,
 } from "../../helper";
@@ -20,7 +21,10 @@ export const watchConverter = (
 
         return {
           use: "watch",
-          expression: `watch(${name}, (${parameters}) => ${block})`,
+          expression: `${getComments(
+            prop,
+            sourceFile
+          )}watch(${name}, (${parameters}) => ${block})`,
         };
       } else if (ts.isPropertyAssignment(prop)) {
         if (!ts.isObjectLiteralExpression(prop.initializer)) return;
@@ -58,7 +62,10 @@ export const watchConverter = (
 
         return {
           use: "watch",
-          expression: `watch(${name}, (${parameters}) => ${block}, ${JSON.stringify(
+          expression: `${getComments(
+            prop,
+            sourceFile
+          )}watch(${name}, (${parameters}) => ${block}, ${JSON.stringify(
             options
           )} )`,
         };

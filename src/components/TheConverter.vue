@@ -1,5 +1,13 @@
+<script lang="ts">
+declare global {
+  interface Window {
+    __converterLastInput?: string;
+  }
+}
+</script>
+
 <script lang="ts" setup>
-import { ref, watch } from "vue";
+import { ref, watch, watchEffect } from "vue";
 import prettier from "prettier";
 import parserTypeScript from "prettier/parser-typescript";
 import parserHtml from "prettier/parser-html";
@@ -17,7 +25,6 @@ const templateMap = new Map([
   ["classAPI", classApi],
 ]);
 
-//@ts-expect-error global
 const input = ref(window.__converterLastInput || "");
 const output = ref("");
 const hasError = ref(false);
@@ -40,58 +47,59 @@ watch(
   { immediate: !window.__converterLastInput }
 );
 
-watch(
-  input,
-  () => {
-    try {
-      // Make hot reload experience better by remember the last input
-      //@ts-expect-error global
-      window.__converterLastInput = input.value;
+watchEffect(() => {
+  try {
+    // Make hot reload experience better by remember the last input
+    window.__converterLastInput = input.value;
 
-      hasError.value = false;
-      let outputText = "";
-      try {
-         outputText = convertSrc(input.value);
-      }
-      catch (e) {
-        output.value = "";
-        throw e;
-      }
-      const prettifiedHtml = hljs.highlightAuto(
-        prettier.format(outputText, {
-          parser: "html",
-          plugins: [parserTypeScript, parserHtml],
-        })
-      ).value;
-      output.value = prettifiedHtml;
-    } catch (err) {
-      hasError.value = true;
-      console.error(err);
+    hasError.value = false;
+    let outputText = "";
+    try {
+      outputText = convertSrc(input.value);
+    } catch (e) {
+      output.value = "";
+      throw e;
     }
-  },
-  { immediate: true }
-);
+    const prettifiedHtml = hljs.highlightAuto(
+      prettier.format(outputText, {
+        parser: "html",
+        plugins: [parserTypeScript, parserHtml],
+      })
+    ).value;
+    output.value = prettifiedHtml;
+  } catch (err) {
+    hasError.value = true;
+    console.error(err);
+  }
+});
 </script>
 
 <template>
   <div class="flex flex-row h-full">
-    <div class="flex-1 flex flex-col ">
+    <div class="flex-1 flex flex-col">
       <div class="flex flex-row">
         <h2>Input: (Vue2)</h2>
-        <select v-model="selectedTemplate" class="border">
+        <div style="flex-grow: 1"></div>
+        Template:
+        <select
+          v-model="selectedTemplate"
+          class="mx-2"
+          style="background: #222; color: white"
+        >
           <option v-for="templateItem in templateKeys" :key="templateItem">
             {{ templateItem }}
           </option>
         </select>
       </div>
       <textarea
-        class="border w-full text-xs leading-3 flex-1 p-2" style="background: transparent"
+        class="border w-full text-xs leading-3 flex-1 p-2"
+        style="background: transparent"
         :class="{ hasError }"
         v-model="input"
       ></textarea>
     </div>
     <div class="flex-1 flex flex-col">
-      <h2>Output: (Vue2 / Composition API)</h2>
+      <h2>Output: (Vue3 / Script Setup)</h2>
       <pre
         class="hljs border w-full text-xs leading-3 flex-1 p-2 whitespace-pre-wrap select-all"
         v-html="output"

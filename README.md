@@ -1,25 +1,18 @@
 # vue-composition-converter
 
-Convert optionsAPI into composition API
+Convert options API and vue-class-component into script setup
 
-## demo
 
-https://vue-composition-converter.vercel.app/
+## Instructions
+1. Clone this repo
+2. `npm ci`
+3. `npm run dev`
+4. Open the web interface and paste your code on the left. New code is on the right. The output is not perfect and will require manual refinement. 
 
-## convert options into `setup`
 
-- data, computed, watch, methods, lifecycle, props -> setup()
-  - data -> ref()
-  - computed -> computed()
-  - watch -> watch()
-  - methods -> function
-  - lifecycle -> lifecycle hooks
-    - beforeCreate, created -> Immediate function
-  - props -> toRefs()
+## Notable limitations:
 
-## convert `this`
-
-- this.prop
-  - (toRefs, ref, computed) -> prop.value
-  - (other) -> prop
-- this.$globalProp -> ctx.root.$globalProp
+The following elements will be roughly converted, but in a broken state. Manual refinement will be needed.
+- Anything accessed from the component instance that the component doesn't own. `$route`, `$router`, `$refs`, `$emit`.
+- Class component `@Watch`ers that are provided a string path.
+- Vuex usages
