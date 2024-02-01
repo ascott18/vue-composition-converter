@@ -3,11 +3,15 @@
 Convert options API and vue-class-component into script setup
 
 
+## Demo
+
+http://ascott18.github.io/vue-composition-converter
+
 ## Instructions
-1. Clone this repo
-2. `npm ci`
-3. `npm run dev`
-4. Open the web interface and paste your code on the left. New code is on the right. The output is not perfect and will require manual refinement. 
+1. Acquire the app:
+    1. Go to http://ascott18.github.io/vue-composition-converter
+    1. OR, Clone this repo, `npm ci`, `npm run dev`
+2. Open the web interface and paste your code on the left. New code is on the right. The output is not perfect and will require manual refinement. 
 
 
 ## Notable limitations:
