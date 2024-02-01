@@ -109,7 +109,7 @@ watchEffect(() => {
       class="absolute right-2 top-2 w-16 h-16 bg-white rounded-full p-2 hover:bg-yellow-400"
     >
       <a
-        href="https://github.com/miyaoka/vue-composition-converter"
+        href="https://github.com/ascott18/vue-composition-converter"
         target="_blank"
         title="repository"
       >
